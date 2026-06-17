@@ -7,7 +7,6 @@ const C = {
   muted:"#64748B", border:"#E2E8F0",
 };
 
-// ── DEMO DATEN ─────────────────────────────────────────────────────────────────
 const INIT_USERS = [
   {id:1, name:"Max Mustermann",  email:"max@firma.de",   role:"driver", pin:"1234", status:"active"},
   {id:2, name:"Anna Schmidt",    email:"anna@firma.de",  role:"driver", pin:"2345", status:"active"},
@@ -30,22 +29,21 @@ const INIT_HANDOVERS = [
 ];
 
 const INIT_RECEIPTS = [
-  {id:1, carId:1, userId:1, date:"2025-06-12", amount:"62.40", note:"Tanken A9 Raststätte", img:null},
-  {id:2, carId:2, userId:2, date:"2025-06-14", amount:"75.80", note:"Tanken Shell München",  img:null},
+  {id:1, carId:1, userId:1, date:"2025-06-01", amount:"62.40", km:"44200", note:"Tanken A9", img:null},
+  {id:2, carId:1, userId:1, date:"2025-06-12", amount:"58.90", km:"45800", note:"Tanken Shell", img:null},
+  {id:3, carId:2, userId:2, date:"2025-06-14", amount:"75.80", km:"32100", note:"Tanken München", img:null},
 ];
 
-// ── UI KOMPONENTEN ─────────────────────────────────────────────────────────────
 function Btn({onClick, variant="primary", disabled, full, small, children}) {
-  const bg = variant==="primary"?C.blue : variant==="danger"?C.danger : variant==="amber"?C.accent : variant==="success"?C.success : "#F1F5F9";
-  const col = variant==="secondary" ? C.text : variant==="amber" ? C.navy : "#fff";
+  const bg = variant==="primary"?C.blue:variant==="danger"?C.danger:variant==="amber"?C.accent:variant==="success"?C.success:"#F1F5F9";
+  const col = variant==="secondary"?C.text:variant==="amber"?C.navy:"#fff";
   return (
     <button onClick={onClick} disabled={disabled} style={{
       background:bg, color:col, border:"none", borderRadius:10,
-      padding: small ? "6px 12px" : "11px 18px",
-      fontSize: small ? 12 : 14, fontWeight:700, cursor:disabled?"not-allowed":"pointer",
+      padding:small?"6px 12px":"11px 18px",
+      fontSize:small?12:14, fontWeight:700, cursor:disabled?"not-allowed":"pointer",
       display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6,
       width:full?"100%":"auto", opacity:disabled?0.5:1, fontFamily:"inherit",
-      transition:"opacity 0.15s",
     }}>{children}</button>
   );
 }
@@ -55,7 +53,6 @@ function Field({label, value, onChange, type="text", placeholder, maxLength}) {
     <div style={{marginBottom:14}}>
       {label && <div style={{fontSize:12,fontWeight:600,color:C.muted,marginBottom:5}}>{label}</div>}
       <input type={type} value={value} onChange={onChange} placeholder={placeholder} maxLength={maxLength}
-        inputMode={type==="number"?"decimal":type==="password"?"numeric":undefined}
         style={{
           width:"100%", border:`1.5px solid ${C.border}`, borderRadius:10,
           padding:"11px 14px", fontSize:15, fontFamily:"inherit", color:C.text,
@@ -83,8 +80,7 @@ function Card({children, accent, style:extra}) {
     <div style={{
       background:C.card, borderRadius:14, padding:16, marginBottom:12,
       boxShadow:"0 1px 4px rgba(15,31,61,0.07)", border:`1px solid ${C.border}`,
-      borderLeft: accent ? `4px solid ${accent}` : undefined,
-      ...extra,
+      borderLeft:accent?`4px solid ${accent}`:undefined, ...extra,
     }}>{children}</div>
   );
 }
@@ -121,7 +117,7 @@ function SectionTitle({children}) {
 
 // ── LOGIN / REGISTRIERUNG ──────────────────────────────────────────────────────
 function AuthScreen({users, setUsers, onLogin}) {
-  const [mode,setMode]       = useState("login"); // login | register
+  const [mode,setMode]       = useState("login");
   const [email,setEmail]     = useState("");
   const [pin,setPin]         = useState("");
   const [name,setName]       = useState("");
@@ -132,7 +128,7 @@ function AuthScreen({users, setUsers, onLogin}) {
   const doLogin = () => {
     const u = users.find(u=>u.email===email.trim().toLowerCase()&&u.pin===pin.trim());
     if (!u) { setError("E-Mail oder PIN falsch."); return; }
-    if (u.status==="pending") { setError("Dein Account wartet noch auf Freischaltung durch den Chef."); return; }
+    if (u.status==="pending") { setError("Dein Account wartet auf Freischaltung durch den Chef."); return; }
     onLogin(u);
   };
 
@@ -141,13 +137,9 @@ function AuthScreen({users, setUsers, onLogin}) {
     if (pin!==pin2) { setError("PINs stimmen nicht überein."); return; }
     if (pin.length<4) { setError("PIN muss mindestens 4 Ziffern haben."); return; }
     if (users.find(u=>u.email===email.trim().toLowerCase())) { setError("Diese E-Mail ist bereits registriert."); return; }
-    const newUser = {id:users.length+1, name:name.trim(), email:email.trim().toLowerCase(), role:"driver", pin:pin.trim(), status:"pending"};
-    setUsers(p=>[...p,newUser]);
+    setUsers(p=>[...p,{id:p.length+1,name:name.trim(),email:email.trim().toLowerCase(),role:"driver",pin:pin.trim(),status:"pending"}]);
     setSuccess("Registrierung erfolgreich! Der Chef muss dich zuerst freischalten.");
-    setError("");
-    setMode("login");
-    setEmail(email.trim().toLowerCase());
-    setPin("");
+    setError(""); setMode("login"); setEmail(email.trim().toLowerCase()); setPin("");
   };
 
   return (
@@ -161,9 +153,7 @@ function AuthScreen({users, setUsers, onLogin}) {
         <div style={{fontSize:26,fontWeight:800,color:"#fff",letterSpacing:-1}}>Firmenwagen</div>
         <div style={{fontSize:14,color:"#94A3B8",marginTop:4}}>Verwaltung</div>
       </div>
-
       <div style={{background:C.card,borderRadius:20,padding:"28px 22px",width:"100%",maxWidth:380,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
-        {/* Tabs */}
         <div style={{display:"flex",background:C.bg,borderRadius:10,padding:4,marginBottom:22}}>
           {["login","register"].map(m=>(
             <button key={m} onClick={()=>{setMode(m);setError("");setSuccess("");}} style={{
@@ -176,10 +166,8 @@ function AuthScreen({users, setUsers, onLogin}) {
             </button>
           ))}
         </div>
-
         {success && <div style={{background:"#D1FAE5",color:C.success,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,marginBottom:14}}>{success}</div>}
         {error   && <div style={{background:"#FEE2E2",color:C.danger, borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,marginBottom:14}}>{error}</div>}
-
         {mode==="login" ? (
           <>
             <Field label="E-Mail" type="email" placeholder="name@email.de" value={email} onChange={e=>{setEmail(e.target.value);setError("");}}/>
@@ -209,11 +197,9 @@ function HandoverSheet({cars, users, currentUser, preselectedCar, onClose, onSav
   const [toId,setToId]   = useState("");
   const [date,setDate]   = useState(new Date().toISOString().split("T")[0]);
   const [note,setNote]   = useState("");
-
-  const availableCars = currentUser.role==="admin" ? cars : cars.filter(c=>c.driverId===currentUser.id);
-  const currentDriverId = cars.find(c=>c.id===parseInt(carId))?.driverId;
-  const currentDriver   = users.find(u=>u.id===currentDriverId);
-
+  const availableCars    = currentUser.role==="admin"?cars:cars.filter(c=>c.driverId===currentUser.id);
+  const currentDriverId  = cars.find(c=>c.id===parseInt(carId))?.driverId;
+  const currentDriver    = users.find(u=>u.id===currentDriverId);
   return (
     <Sheet onClose={onClose} title="Übergabe eintragen">
       <Dropdown label="Fahrzeug" value={carId} onChange={e=>setCarId(e.target.value)}>
@@ -238,10 +224,11 @@ function HandoverSheet({cars, users, currentUser, preselectedCar, onClose, onSav
 }
 
 // ── TANKBELEG SHEET ────────────────────────────────────────────────────────────
-function ReceiptSheet({cars, currentUser, onClose, onSave}) {
+function ReceiptSheet({cars, currentUser, receipts, onClose, onSave}) {
   const myCar = cars.find(c=>c.driverId===currentUser.id);
   const [carId,setCarId]     = useState(myCar?.id||"");
   const [amount,setAmount]   = useState("");
+  const [km,setKm]           = useState("");
   const [date,setDate]       = useState(new Date().toISOString().split("T")[0]);
   const [note,setNote]       = useState("");
   const [preview,setPreview] = useState(null);
@@ -255,6 +242,12 @@ function ReceiptSheet({cars, currentUser, onClose, onSave}) {
     reader.readAsDataURL(file);
   };
 
+  const lastKm = carId ? [...receipts]
+    .filter(r=>r.carId===parseInt(carId)&&r.km)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date))[0]?.km : null;
+
+  const kmWarning = km && lastKm && parseInt(km) <= parseInt(lastKm);
+
   return (
     <Sheet onClose={onClose} title="Tankbeleg hochladen">
       <Dropdown label="Fahrzeug" value={carId} onChange={e=>setCarId(e.target.value)}>
@@ -262,6 +255,23 @@ function ReceiptSheet({cars, currentUser, onClose, onSave}) {
         {cars.map(c=><option key={c.id} value={c.id}>{c.plate} – {c.model}</option>)}
       </Dropdown>
       <Field label="Betrag (Euro)" type="number" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)}/>
+
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:12,fontWeight:600,color:C.muted,marginBottom:5}}>Kilometerstand (Pflicht)</div>
+        <input type="number" value={km} onChange={e=>setKm(e.target.value)} placeholder="z.B. 45000"
+          style={{
+            width:"100%", border:`1.5px solid ${kmWarning?C.danger:C.border}`, borderRadius:10,
+            padding:"11px 14px", fontSize:15, fontFamily:"inherit", color:C.text,
+            background:"#F8FAFC", boxSizing:"border-box", outline:"none",
+          }}/>
+        {lastKm && <div style={{fontSize:12,color:C.muted,marginTop:4}}>Letzter Stand: {parseInt(lastKm).toLocaleString("de-DE")} km</div>}
+        {kmWarning && (
+          <div style={{fontSize:12,color:C.danger,fontWeight:700,marginTop:4}}>
+            Warnung: KM-Stand niedriger als beim letzten Mal!
+          </div>
+        )}
+      </div>
+
       <Field label="Datum" type="date" value={date} onChange={e=>setDate(e.target.value)}/>
       <Field label="Notiz" placeholder="z.B. Shell Autobahn A9" value={note} onChange={e=>setNote(e.target.value)}/>
       <div style={{fontSize:12,fontWeight:600,color:C.muted,marginBottom:8}}>Foto des Belegs</div>
@@ -281,7 +291,7 @@ function ReceiptSheet({cars, currentUser, onClose, onSave}) {
       </label>
       <div style={{display:"flex",gap:10}}>
         <Btn variant="secondary" onClick={onClose}>Abbrechen</Btn>
-        <Btn variant="amber" disabled={!carId||!amount||!date} onClick={()=>onSave({carId:parseInt(carId),amount,date,note,img})}>
+        <Btn variant="amber" disabled={!carId||!amount||!date||!km} onClick={()=>onSave({carId:parseInt(carId),amount,km,date,note,img})}>
           Speichern
         </Btn>
       </div>
@@ -320,9 +330,68 @@ function ImgSheet({receipt, onClose}) {
       {receipt.img && <img src={receipt.img} style={{width:"100%",borderRadius:12,marginBottom:14}} alt="Beleg"/>}
       <div style={{fontWeight:700,fontSize:16}}>{parseFloat(receipt.amount).toFixed(2).replace(".",",")} Euro</div>
       <div style={{fontSize:13,color:C.muted,marginTop:4}}>{receipt.note}</div>
-      <div style={{marginTop:16}}>
-        <Btn variant="secondary" full onClick={onClose}>Schließen</Btn>
-      </div>
+      <div style={{marginTop:16}}><Btn variant="secondary" full onClick={onClose}>Schließen</Btn></div>
+    </Sheet>
+  );
+}
+
+// ── KM VERLAUF SHEET ───────────────────────────────────────────────────────────
+function KmSheet({car, receipts, users, onClose}) {
+  const carReceipts = [...receipts.filter(r=>r.carId===car.id&&r.km)]
+    .sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+  return (
+    <Sheet onClose={onClose} title={`KM-Verlauf: ${car.plate}`}>
+      {carReceipts.length===0 ? (
+        <div style={{textAlign:"center",color:C.muted,padding:"20px 0"}}>Noch keine KM-Daten vorhanden.</div>
+      ) : (
+        carReceipts.map((r,i)=>{
+          const prev = carReceipts[i-1];
+          const diff = prev ? parseInt(r.km)-parseInt(prev.km) : null;
+          const warning = diff !== null && diff <= 0;
+          const uploader = users.find(u=>u.id===r.userId);
+          return (
+            <div key={r.id} style={{
+              borderBottom:`1px solid ${C.border}`, paddingBottom:12, marginBottom:12,
+              borderLeft:`3px solid ${warning?C.danger:diff>500?C.success:C.accent}`,
+              paddingLeft:12,
+            }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div>
+                  <div style={{fontWeight:800,fontSize:16,color:C.text}}>
+                    {parseInt(r.km).toLocaleString("de-DE")} km
+                  </div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>
+                    {new Date(r.date).toLocaleDateString("de-DE")} · {uploader?.name}
+                  </div>
+                  {r.note && <div style={{fontSize:12,color:C.muted}}>{r.note}</div>}
+                </div>
+                <div style={{textAlign:"right"}}>
+                  {diff !== null ? (
+                    <div style={{
+                      fontWeight:700, fontSize:14,
+                      color: warning?C.danger:C.success,
+                    }}>
+                      {warning ? "Warnung!" : `+${diff.toLocaleString("de-DE")} km`}
+                    </div>
+                  ) : (
+                    <div style={{fontSize:12,color:C.muted}}>Start</div>
+                  )}
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>
+                    {parseFloat(r.amount).toFixed(2).replace(".",",")} Euro
+                  </div>
+                </div>
+              </div>
+              {warning && (
+                <div style={{background:"#FEE2E2",color:C.danger,borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:700,marginTop:8}}>
+                  KM-Stand niedriger als vorheriger Eintrag!
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+      <Btn variant="secondary" full onClick={onClose}>Schließen</Btn>
     </Sheet>
   );
 }
@@ -338,6 +407,7 @@ export default function App() {
   const [modal,setModal]         = useState(null);
   const [selected,setSelected]   = useState(null);
   const [viewReceipt,setViewReceipt] = useState(null);
+  const [kmCar,setKmCar]         = useState(null);
 
   if (!user) return <AuthScreen users={users} setUsers={setUsers} onLogin={setUser}/>;
 
@@ -357,8 +427,18 @@ export default function App() {
 
   const myReceipts = receipts.filter(r=>r.userId===user.id);
 
+  // KM Warnung prüfen
+  const getKmWarning = (carId) => {
+    const carReceipts = [...receipts.filter(r=>r.carId===carId&&r.km)]
+      .sort((a,b)=>new Date(a.date)-new Date(b.date));
+    for (let i=1;i<carReceipts.length;i++) {
+      if (parseInt(carReceipts[i].km)<=parseInt(carReceipts[i-1].km)) return true;
+    }
+    return false;
+  };
+
   return (
-    <div style={{fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,sans-serif",background:C.bg,minHeight:"100vh",maxWidth:480,margin:"0 auto",position:"relative"}}>
+    <div style={{fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,sans-serif",background:C.bg,minHeight:"100vh",maxWidth:480,margin:"0 auto"}}>
 
       {/* HEADER */}
       <div style={{
@@ -403,13 +483,11 @@ export default function App() {
         ))}
       </nav>
 
-      {/* CONTENT */}
       <div style={{padding:"16px 16px 100px"}}>
 
-        {/* ── FAHRZEUGE ── */}
+        {/* FAHRZEUGE */}
         {tab==="cars" && (
           <>
-            {/* Freischaltungen für Chef */}
             {user.role==="admin" && pending.length>0 && (
               <>
                 <SectionTitle>Neue Registrierungen ({pending.length})</SectionTitle>
@@ -418,40 +496,55 @@ export default function App() {
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div>
                         <div style={{fontWeight:700,fontSize:15}}>{u.name}</div>
-                        <div style={{fontSize:12,color:C.muted,marginTop:2}}>{u.email}</div>
+                        <div style={{fontSize:12,color:C.muted}}>{u.email}</div>
                       </div>
                       <div style={{display:"flex",gap:8}}>
-                        <Btn variant="danger" small onClick={()=>rejectUser(u.id)}>✕</Btn>
-                        <Btn variant="success" small onClick={()=>approveUser(u.id)}>✓ Freischalten</Btn>
+                        <Btn variant="danger" small onClick={()=>rejectUser(u.id)}>Ablehnen</Btn>
+                        <Btn variant="success" small onClick={()=>approveUser(u.id)}>Freischalten</Btn>
                       </div>
                     </div>
                   </Card>
                 ))}
-                <div style={{height:4}}/>
               </>
             )}
 
             <SectionTitle>Alle Fahrzeuge ({cars.length})</SectionTitle>
             {cars.map(car=>{
-              const driver = findUser(car.driverId);
-              const count  = receipts.filter(r=>r.carId===car.id).length;
-              const canHandover = user.role==="admin" || car.driverId===user.id;
+              const driver   = findUser(car.driverId);
+              const count    = receipts.filter(r=>r.carId===car.id).length;
+              const hasWarn  = user.role==="admin" && getKmWarning(car.id);
+              const lastKm   = [...receipts.filter(r=>r.carId===car.id&&r.km)]
+                .sort((a,b)=>new Date(b.date)-new Date(a.date))[0]?.km;
               return (
-                <Card key={car.id} accent={car.color}>
+                <Card key={car.id} accent={hasWarn?C.danger:car.color}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
                     <Plate text={car.plate}/>
                     {driver
                       ? <span style={{background:car.color,borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:C.navyMid}}>👤 {driver.name}</span>
-                      : <span style={{background:"#FEE2E2",borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#991B1B"}}>🔑 Frei</span>
+                      : <span style={{background:"#FEE2E2",borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#991B1B"}}>Frei</span>
                     }
                   </div>
                   <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:4}}>{car.model}</div>
-                  {car.since && <div style={{fontSize:12,color:C.muted,marginBottom:8}}>🕐 Seit {new Date(car.since).toLocaleDateString("de-DE")}</div>}
+                  {lastKm && (
+                    <div style={{fontSize:12,color:C.muted,marginBottom:6}}>
+                      Letzter KM-Stand: <strong>{parseInt(lastKm).toLocaleString("de-DE")} km</strong>
+                      {hasWarn && <span style={{color:C.danger,fontWeight:700,marginLeft:8}}>Auffälligkeit!</span>}
+                    </div>
+                  )}
                   <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                    <Tag color={C.accent}>⛽ {count} Beleg{count!==1?"e":""}</Tag>
-                    {canHandover && (
+                    <Tag color={C.accent}>{count} Beleg{count!==1?"e":""}</Tag>
+                    {user.role==="admin" && (
+                      <button onClick={()=>{setKmCar(car);setModal("km");}} style={{
+                        background:hasWarn?"#FEE2E2":C.bg,
+                        color:hasWarn?C.danger:C.text,
+                        border:"none",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+                      }}>
+                        {hasWarn?"⚠️ KM prüfen":"📊 KM-Verlauf"}
+                      </button>
+                    )}
+                    {(user.role==="admin"||car.driverId===user.id) && (
                       <button onClick={()=>{setSelected(car);setModal("handover");}} style={{
-                        background:"#F1F5F9",color:C.text,border:"none",borderRadius:8,
+                        background:C.bg,color:C.text,border:"none",borderRadius:8,
                         padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
                       }}>🔄 Übergabe</button>
                     )}
@@ -471,16 +564,15 @@ export default function App() {
           </>
         )}
 
-        {/* ── ÜBERGABEN ── */}
+        {/* ÜBERGABEN */}
         {tab==="handover" && (
           <>
             <SectionTitle>Übergabe-Historie</SectionTitle>
             {[...handovers].reverse().map(h=>{
               const car  = cars.find(c=>c.id===h.carId);
-              const from = h.fromId ? findUser(h.fromId) : null;
+              const from = h.fromId?findUser(h.fromId):null;
               const to   = findUser(h.toId);
-              // Fahrer sieht nur seine eigenen Übergaben
-              if (user.role!=="admin" && h.fromId!==user.id && h.toId!==user.id) return null;
+              if (user.role!=="admin"&&h.fromId!==user.id&&h.toId!==user.id) return null;
               return (
                 <Card key={h.id}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
@@ -497,7 +589,7 @@ export default function App() {
                     </span>
                   </div>
                   <div style={{fontSize:12,color:C.muted,marginTop:8}}>
-                    📅 {new Date(h.date).toLocaleDateString("de-DE")}{h.note?` · ${h.note}`:""}
+                    {new Date(h.date).toLocaleDateString("de-DE")}{h.note?` · ${h.note}`:""}
                   </div>
                 </Card>
               );
@@ -506,44 +598,52 @@ export default function App() {
           </>
         )}
 
-        {/* ── TANKBELEGE ── */}
+        {/* TANKBELEGE */}
         {tab==="receipts" && (
           <>
             {user.role==="admin" ? (
               <>
                 <SectionTitle>Alle Belege ({receipts.length})</SectionTitle>
-                {/* CSV Export für Chef */}
                 <button onClick={()=>{
-                  const rows = ["Datum,Betrag,Kennzeichen,Mitarbeiter,Notiz",
+                  const rows = ["Datum,Betrag,KM-Stand,Kennzeichen,Mitarbeiter,Notiz",
                     ...receipts.map(r=>{
                       const car=cars.find(c=>c.id===r.carId);
                       const u=findUser(r.userId);
-                      return `${r.date},${r.amount},${car?.plate||""},${u?.name||""},${r.note||""}`;
+                      return `${r.date},${r.amount},${r.km||""},${car?.plate||""},${u?.name||""},${r.note||""}`;
                     })
                   ].join("\n");
-                  const blob = new Blob([rows],{type:"text/csv"});
-                  const a = document.createElement("a");
-                  a.href = URL.createObjectURL(blob);
-                  a.download = "tankbelege.csv";
+                  const blob=new Blob([rows],{type:"text/csv"});
+                  const a=document.createElement("a");
+                  a.href=URL.createObjectURL(blob);
+                  a.download="tankbelege.csv";
                   a.click();
                 }} style={{
                   background:C.success+"22",color:C.success,border:`1.5px solid ${C.success}33`,
                   borderRadius:10,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer",
                   fontFamily:"inherit",width:"100%",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8,
                 }}>
-                  ⬇️ Alle Belege als Excel/CSV herunterladen
+                  Alle Belege als Excel/CSV herunterladen
                 </button>
                 {receipts.map(r=>{
                   const car=cars.find(c=>c.id===r.carId);
                   const uploader=findUser(r.userId);
+                  const prevReceipt=[...receipts.filter(x=>x.carId===r.carId&&x.km&&new Date(x.date)<new Date(r.date))]
+                    .sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+                  const kmWarn = r.km && prevReceipt && parseInt(r.km)<=parseInt(prevReceipt.km);
                   return (
-                    <Card key={r.id}>
+                    <Card key={r.id} accent={kmWarn?C.danger:undefined}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                         <div>
-                          <div style={{fontWeight:800,fontSize:17,color:C.text}}>{parseFloat(r.amount).toFixed(2).replace(".",",")} €</div>
+                          <div style={{fontWeight:800,fontSize:17,color:C.text}}>{parseFloat(r.amount).toFixed(2).replace(".",",")} Euro</div>
                           <div style={{fontSize:12,color:C.muted,marginTop:2}}>{new Date(r.date).toLocaleDateString("de-DE")} · {car?.plate}</div>
                           <div style={{fontSize:12,color:C.muted}}>👤 {uploader?.name}</div>
-                          {r.note&&<div style={{fontSize:13,color:C.text,marginTop:5}}>{r.note}</div>}
+                          {r.km && (
+                            <div style={{fontSize:12,fontWeight:700,color:kmWarn?C.danger:C.muted,marginTop:2}}>
+                              {kmWarn?"⚠️ ":""}{parseInt(r.km).toLocaleString("de-DE")} km
+                              {kmWarn && " – KM auffällig!"}
+                            </div>
+                          )}
+                          {r.note&&<div style={{fontSize:13,color:C.text,marginTop:4}}>{r.note}</div>}
                         </div>
                         <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
                           {r.img
@@ -565,11 +665,7 @@ export default function App() {
               <>
                 <SectionTitle>Meine Belege ({myReceipts.length})</SectionTitle>
                 {myReceipts.length===0 && (
-                  <Card>
-                    <div style={{textAlign:"center",color:C.muted,padding:"20px 0",fontSize:14}}>
-                      Noch keine Belege hochgeladen.
-                    </div>
-                  </Card>
+                  <Card><div style={{textAlign:"center",color:C.muted,padding:"20px 0",fontSize:14}}>Noch keine Belege hochgeladen.</div></Card>
                 )}
                 {myReceipts.map(r=>{
                   const car=cars.find(c=>c.id===r.carId);
@@ -577,9 +673,10 @@ export default function App() {
                     <Card key={r.id}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                         <div>
-                          <div style={{fontWeight:800,fontSize:17}}>{parseFloat(r.amount).toFixed(2).replace(".",",")} €</div>
+                          <div style={{fontWeight:800,fontSize:17}}>{parseFloat(r.amount).toFixed(2).replace(".",",")} Euro</div>
                           <div style={{fontSize:12,color:C.muted,marginTop:2}}>{new Date(r.date).toLocaleDateString("de-DE")} · {car?.plate}</div>
-                          {r.note&&<div style={{fontSize:13,color:C.text,marginTop:5}}>{r.note}</div>}
+                          {r.km && <div style={{fontSize:12,color:C.muted,marginTop:2}}>{parseInt(r.km).toLocaleString("de-DE")} km</div>}
+                          {r.note&&<div style={{fontSize:13,color:C.text,marginTop:4}}>{r.note}</div>}
                         </div>
                         {r.img
                           ? <img src={r.img} onClick={()=>{setViewReceipt(r);setModal("img");}}
@@ -596,7 +693,7 @@ export default function App() {
           </>
         )}
 
-        {/* ── PROFIL ── */}
+        {/* PROFIL */}
         {tab==="profile" && (
           <>
             <Card style={{textAlign:"center",padding:"28px 20px"}}>
@@ -622,7 +719,7 @@ export default function App() {
                   <Plate text={userCar.plate}/>
                   <span style={{fontWeight:600}}>{userCar.model}</span>
                 </div>
-                {userCar.since&&<div style={{fontSize:12,color:C.muted,marginTop:8}}>Zugewiesen seit {new Date(userCar.since).toLocaleDateString("de-DE")}</div>}
+                {userCar.since&&<div style={{fontSize:12,color:C.muted,marginTop:8}}>Seit {new Date(userCar.since).toLocaleDateString("de-DE")}</div>}
               </Card>
             )}
 
@@ -644,7 +741,6 @@ export default function App() {
                     ))}
                   </div>
                 </Card>
-
                 <Card>
                   <SectionTitle>Alle Mitarbeiter</SectionTitle>
                   {users.filter(u=>u.role!=="admin").map(u=>(
@@ -661,7 +757,6 @@ export default function App() {
                 </Card>
               </>
             )}
-
             <Btn full variant="danger" onClick={()=>setUser(null)}>Abmelden</Btn>
           </>
         )}
@@ -678,7 +773,7 @@ export default function App() {
           }}/>
       )}
       {modal==="receipt" && (
-        <ReceiptSheet cars={cars} currentUser={user} onClose={()=>setModal(null)}
+        <ReceiptSheet cars={cars} currentUser={user} receipts={receipts} onClose={()=>setModal(null)}
           onSave={r=>{
             setReceipts(p=>[...p,{...r,id:p.length+1,userId:user.id}]);
             setModal(null);
@@ -693,6 +788,9 @@ export default function App() {
       )}
       {modal==="img" && viewReceipt && (
         <ImgSheet receipt={viewReceipt} onClose={()=>setModal(null)}/>
+      )}
+      {modal==="km" && kmCar && (
+        <KmSheet car={kmCar} receipts={receipts} users={users} onClose={()=>setModal(null)}/>
       )}
     </div>
   );
