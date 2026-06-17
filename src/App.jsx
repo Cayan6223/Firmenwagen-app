@@ -179,7 +179,12 @@ function AuthScreen({users, setUsers, onLogin}) {
 
         {success && <div style={{background:"#D1FAE5",color:C.success,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,marginBottom:14}}>{success}</div>}
         {error   && <div style={{background:"#FEE2E2",color:C.danger, borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,marginBottom:14}}>{error}</div>}
-  
+
+        {mode==="login" ? (
+          <>
+            <Field label="E-Mail" type="email" placeholder="name@email.de" value={email} onChange={e=>{setEmail(e.target.value);setError("");}}/>
+            <Field label="PIN" type="password" placeholder="••••" value={pin} maxLength={6} onChange={e=>{setPin(e.target.value);setError("");}}/>
+            <Btn full onClick={doLogin}>Anmelden</Btn>
           </>
         ) : (
           <>
