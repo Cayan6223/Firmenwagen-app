@@ -744,14 +744,39 @@ export default function App() {
                 <Card>
                   <SectionTitle>Alle Mitarbeiter</SectionTitle>
                   {users.filter(u=>u.role!=="admin").map(u=>(
-                    <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingBottom:10,marginBottom:10,borderBottom:`1px solid ${C.border}`}}>
-                      <div>
-                        <div style={{fontWeight:600,fontSize:14}}>{u.name}</div>
-                        <div style={{fontSize:12,color:C.muted}}>{u.email}</div>
+                    <div key={u.id} style={{paddingBottom:12,marginBottom:12,borderBottom:`1px solid ${C.border}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:14}}>{u.name}</div>
+                          <div style={{fontSize:12,color:C.muted}}>{u.email}</div>
+                        </div>
+                        <Tag color={u.status==="active"?C.success:C.accent}>
+                          {u.status==="active"?"Aktiv":"Ausstehend"}
+                        </Tag>
                       </div>
-                      <Tag color={u.status==="active"?C.success:C.accent}>
-                        {u.status==="active"?"Aktiv":"Ausstehend"}
-                      </Tag>
+                      <div style={{display:"flex",gap:8}}>
+                        <button onClick={()=>{
+                          const newPin = prompt(`Neue PIN fuer ${u.name}:`);
+                          if (newPin && newPin.length>=4) {
+                            setUsers(p=>p.map(x=>x.id===u.id?{...x,pin:newPin}:x));
+                            alert(`PIN fuer ${u.name} wurde geaendert.`);
+                          } else if (newPin) {
+                            alert("PIN muss mindestens 4 Ziffern haben.");
+                          }
+                        }} style={{
+                          background:"#DBEAFE",color:C.blue,border:"none",borderRadius:8,
+                          padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+                        }}>PIN aendern</button>
+                        <button onClick={()=>{
+                          if (window.confirm(`${u.name} wirklich loeschen?`)) {
+                            setUsers(p=>p.filter(x=>x.id!==u.id));
+                            setCars(p=>p.map(c=>c.driverId===u.id?{...c,driverId:null,since:null}:c));
+                          }
+                        }} style={{
+                          background:"#FEE2E2",color:C.danger,border:"none",borderRadius:8,
+                          padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+                        }}>Loeschen</button>
+                      </div>
                     </div>
                   ))}
                 </Card>
