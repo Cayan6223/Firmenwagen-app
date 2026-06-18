@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "./supabase";
 
 const C = {
   navy:"#0F1F3D", navyMid:"#1A3260", blue:"#2563EB",
@@ -6,33 +7,6 @@ const C = {
   bg:"#F0F4F8", card:"#FFFFFF", text:"#0F1F3D",
   muted:"#64748B", border:"#E2E8F0",
 };
-
-const INIT_USERS = [
-  {id:1, name:"Max Mustermann",  email:"max@firma.de",   role:"driver", pin:"1234", status:"active"},
-  {id:2, name:"Anna Schmidt",    email:"anna@firma.de",  role:"driver", pin:"2345", status:"active"},
-  {id:3, name:"Tom Bauer",       email:"tom@firma.de",   role:"driver", pin:"3456", status:"active"},
-  {id:4, name:"Chef",            email:"chef@firma.de",  role:"admin",  pin:"0000", status:"active"},
-  {id:5, name:"Lisa Weber",      email:"lisa@firma.de",  role:"driver", pin:"4567", status:"pending"},
-];
-
-const INIT_CARS = [
-  {id:1, plate:"B-FM 1234", model:"VW Passat",        color:"#DBEAFE", driverId:1, since:"2025-06-01"},
-  {id:2, plate:"B-FM 5678", model:"BMW 3er",           color:"#D1FAE5", driverId:2, since:"2025-05-15"},
-  {id:3, plate:"B-FM 9012", model:"Mercedes C-Klasse", color:"#FEF3C7", driverId:3, since:"2025-06-10"},
-  {id:4, plate:"B-FM 3456", model:"Audi A4",           color:"#F3E8FF", driverId:null, since:null},
-];
-
-const INIT_HANDOVERS = [
-  {id:1, carId:1, fromId:null, toId:1, date:"2025-06-01", note:"Erstausgabe"},
-  {id:2, carId:2, fromId:null, toId:2, date:"2025-05-15", note:""},
-  {id:3, carId:3, fromId:2,   toId:3, date:"2025-06-10", note:"Tausch wegen Urlaub"},
-];
-
-const INIT_RECEIPTS = [
-  {id:1, carId:1, userId:1, date:"2025-06-01", amount:"62.40", km:"44200", note:"Tanken A9", img:null},
-  {id:2, carId:1, userId:1, date:"2025-06-12", amount:"58.90", km:"45800", note:"Tanken Shell", img:null},
-  {id:3, carId:2, userId:2, date:"2025-06-14", amount:"75.80", km:"32100", note:"Tanken München", img:null},
-];
 
 function Btn({onClick, variant="primary", disabled, full, small, children}) {
   const bg = variant==="primary"?C.blue:variant==="danger"?C.danger:variant==="amber"?C.accent:variant==="success"?C.success:"#F1F5F9";
@@ -73,9 +47,7 @@ function Dropdown({label, value, onChange, children}) {
       }}>{children}</select>
     </div>
   );
-}
-
-function Card({children, accent, style:extra}) {
+}function Card({children, accent, style:extra}) {
   return (
     <div style={{
       background:C.card, borderRadius:14, padding:16, marginBottom:12,
@@ -113,10 +85,7 @@ function Tag({children, color=C.success}) {
 
 function SectionTitle({children}) {
   return <div style={{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,textTransform:"uppercase",marginBottom:10}}>{children}</div>;
-}
-
-// ── LOGIN / REGISTRIERUNG ──────────────────────────────────────────────────────
-function AuthScreen({users, setUsers, onLogin}) {
+}function AuthScreen({onLogin}) {
   const [mode,setMode]       = useState("login");
   const [email,setEmail]     = useState("");
   const [pin,setPin]         = useState("");
@@ -124,22 +93,30 @@ function AuthScreen({users, setUsers, onLogin}) {
   const [pin2,setPin2]       = useState("");
   const [error,setError]     = useState("");
   const [success,setSuccess] = useState("");
+  const [loading,setLoading] = useState(false);
 
-  const doLogin = () => {
-    const u = users.find(u=>u.email===email.trim().toLowerCase()&&u.pin===pin.trim());
-    if (!u) { setError("E-Mail oder PIN falsch."); return; }
-    if (u.status==="pending") { setError("Dein Account wartet auf Freischaltung durch den Chef."); return; }
+  const doLogin = async () => {
+    setLoading(true);
+    const { data: all } = await supabase.from("employees").select("*");
+    const u = all?.find(u => u.name.toLowerCase()===email.trim().toLowerCase() && u.pin===pin.trim());
+    setLoading(false);
+    if (!u) { setError("Name oder PIN falsch."); return; }
+    if (u.approved === false) { setError("Dein Account wartet auf Freischaltung durch den Chef."); return; }
     onLogin(u);
   };
 
-  const doRegister = () => {
-    if (!name.trim()||!email.trim()||!pin.trim()) { setError("Bitte alle Felder ausfüllen."); return; }
+  const doRegister = async () => {
+    if (!name.trim()||!pin.trim()) { setError("Bitte alle Felder ausfüllen."); return; }
     if (pin!==pin2) { setError("PINs stimmen nicht überein."); return; }
     if (pin.length<4) { setError("PIN muss mindestens 4 Ziffern haben."); return; }
-    if (users.find(u=>u.email===email.trim().toLowerCase())) { setError("Diese E-Mail ist bereits registriert."); return; }
-    setUsers(p=>[...p,{id:p.length+1,name:name.trim(),email:email.trim().toLowerCase(),role:"driver",pin:pin.trim(),status:"pending"}]);
-    setSuccess("Registrierung erfolgreich! Der Chef muss dich zuerst freischalten.");
-    setError(""); setMode("login"); setEmail(email.trim().toLowerCase()); setPin("");
+    setLoading(true);
+    const { error } = await supabase.from("employees").insert({
+      name: name.trim(), pin: pin.trim(), role: "employee", approved: false,
+    });
+    setLoading(false);
+    if (error) { setError("Fehler: " + error.message); return; }
+    setSuccess("Registrierung erfolgreich! Der Chef muss dich freischalten.");
+    setError(""); setMode("login"); setEmail(name.trim()); setPin("");
   };
 
   return (
@@ -161,26 +138,23 @@ function AuthScreen({users, setUsers, onLogin}) {
               background:mode===m?C.card:"transparent",
               color:mode===m?C.text:C.muted, fontWeight:mode===m?700:500, fontSize:13, cursor:"pointer",
               boxShadow:mode===m?"0 1px 4px rgba(0,0,0,0.1)":"none",
-            }}>
-              {m==="login"?"Anmelden":"Registrieren"}
-            </button>
+            }}>{m==="login"?"Anmelden":"Registrieren"}</button>
           ))}
         </div>
         {success && <div style={{background:"#D1FAE5",color:C.success,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,marginBottom:14}}>{success}</div>}
         {error   && <div style={{background:"#FEE2E2",color:C.danger, borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,marginBottom:14}}>{error}</div>}
         {mode==="login" ? (
           <>
-            <Field label="E-Mail" type="email" placeholder="name@email.de" value={email} onChange={e=>{setEmail(e.target.value);setError("");}}/>
+            <Field label="Name" placeholder="Dein Name" value={email} onChange={e=>{setEmail(e.target.value);setError("");}}/>
             <Field label="PIN" type="password" placeholder="••••" value={pin} maxLength={6} onChange={e=>{setPin(e.target.value);setError("");}}/>
-            <Btn full onClick={doLogin}>Anmelden</Btn>
+            <Btn full onClick={doLogin} disabled={loading}>{loading?"Laden...":"Anmelden"}</Btn>
           </>
         ) : (
           <>
             <Field label="Vollständiger Name" placeholder="Max Mustermann" value={name} onChange={e=>{setName(e.target.value);setError("");}}/>
-            <Field label="E-Mail" type="email" placeholder="deine@email.de" value={email} onChange={e=>{setEmail(e.target.value);setError("");}}/>
             <Field label="PIN wählen (mind. 4 Ziffern)" type="password" placeholder="••••" value={pin} maxLength={6} onChange={e=>{setPin(e.target.value);setError("");}}/>
             <Field label="PIN wiederholen" type="password" placeholder="••••" value={pin2} maxLength={6} onChange={e=>{setPin2(e.target.value);setError("");}}/>
-            <Btn full onClick={doRegister}>Registrieren</Btn>
+            <Btn full onClick={doRegister} disabled={loading}>{loading?"Laden...":"Registrieren"}</Btn>
             <div style={{marginTop:14,fontSize:12,color:C.muted,textAlign:"center"}}>
               Nach der Registrierung muss der Chef deinen Account freischalten.
             </div>
@@ -189,33 +163,30 @@ function AuthScreen({users, setUsers, onLogin}) {
       </div>
     </div>
   );
-}
-
-// ── ÜBERGABE SHEET ─────────────────────────────────────────────────────────────
-function HandoverSheet({cars, users, currentUser, preselectedCar, onClose, onSave}) {
+}function HandoverSheet({cars, users, currentUser, preselectedCar, onClose, onSave}) {
   const [carId,setCarId] = useState(preselectedCar?.id||"");
   const [toId,setToId]   = useState("");
   const [date,setDate]   = useState(new Date().toISOString().split("T")[0]);
   const [note,setNote]   = useState("");
-  const availableCars    = currentUser.role==="admin"?cars:cars.filter(c=>c.driverId===currentUser.id);
-  const currentDriverId  = cars.find(c=>c.id===parseInt(carId))?.driverId;
+  const availableCars    = currentUser.role==="admin"?cars:cars.filter(c=>c.driver_id===currentUser.id);
+  const currentDriverId  = cars.find(c=>c.id===carId)?.driver_id;
   const currentDriver    = users.find(u=>u.id===currentDriverId);
   return (
     <Sheet onClose={onClose} title="Übergabe eintragen">
       <Dropdown label="Fahrzeug" value={carId} onChange={e=>setCarId(e.target.value)}>
         <option value="">– Fahrzeug wählen –</option>
-        {availableCars.map(c=><option key={c.id} value={c.id}>{c.plate} – {c.model}</option>)}
+        {availableCars.map(c=><option key={c.id} value={c.id}>{c.license_plate} – {c.name}</option>)}
       </Dropdown>
       {currentDriver && <div style={{fontSize:13,color:C.muted,marginBottom:14}}>Aktuell bei: <strong>{currentDriver.name}</strong></div>}
       <Dropdown label="Übergabe an" value={toId} onChange={e=>setToId(e.target.value)}>
         <option value="">– Mitarbeiter wählen –</option>
-        {users.filter(u=>u.role!=="admin"&&u.status==="active").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+        {users.filter(u=>u.role!=="admin"&&u.approved===true).map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
       </Dropdown>
       <Field label="Datum" type="date" value={date} onChange={e=>setDate(e.target.value)}/>
       <Field label="Notiz (optional)" placeholder="z.B. Urlaub, Werkstatt..." value={note} onChange={e=>setNote(e.target.value)}/>
       <div style={{display:"flex",gap:10}}>
         <Btn variant="secondary" onClick={onClose}>Abbrechen</Btn>
-        <Btn disabled={!carId||!toId||!date} onClick={()=>onSave({carId:parseInt(carId),fromId:currentDriverId||null,toId:parseInt(toId),date,note})}>
+        <Btn disabled={!carId||!toId||!date} onClick={()=>onSave({vehicle_id:carId,employee_id:toId,date,note})}>
           Speichern
         </Btn>
       </div>
@@ -223,9 +194,8 @@ function HandoverSheet({cars, users, currentUser, preselectedCar, onClose, onSav
   );
 }
 
-// ── TANKBELEG SHEET ────────────────────────────────────────────────────────────
 function ReceiptSheet({cars, currentUser, receipts, onClose, onSave}) {
-  const myCar = cars.find(c=>c.driverId===currentUser.id);
+  const myCar = cars.find(c=>c.driver_id===currentUser.id);
   const [carId,setCarId]     = useState(myCar?.id||"");
   const [amount,setAmount]   = useState("");
   const [km,setKm]           = useState("");
@@ -243,8 +213,8 @@ function ReceiptSheet({cars, currentUser, receipts, onClose, onSave}) {
   };
 
   const lastKm = carId ? [...receipts]
-    .filter(r=>r.carId===parseInt(carId)&&r.km)
-    .sort((a,b)=>new Date(b.date)-new Date(a.date))[0]?.km : null;
+    .filter(r=>r.vehicle_id===carId&&r.odometer)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date))[0]?.odometer : null;
 
   const kmWarning = km && lastKm && parseInt(km) <= parseInt(lastKm);
 
@@ -252,10 +222,9 @@ function ReceiptSheet({cars, currentUser, receipts, onClose, onSave}) {
     <Sheet onClose={onClose} title="Tankbeleg hochladen">
       <Dropdown label="Fahrzeug" value={carId} onChange={e=>setCarId(e.target.value)}>
         <option value="">– Fahrzeug wählen –</option>
-        {cars.map(c=><option key={c.id} value={c.id}>{c.plate} – {c.model}</option>)}
+        {cars.map(c=><option key={c.id} value={c.id}>{c.license_plate} – {c.name}</option>)}
       </Dropdown>
       <Field label="Betrag (Euro)" type="number" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)}/>
-
       <div style={{marginBottom:14}}>
         <div style={{fontSize:12,fontWeight:600,color:C.muted,marginBottom:5}}>Kilometerstand (Pflicht)</div>
         <input type="number" value={km} onChange={e=>setKm(e.target.value)} placeholder="z.B. 45000"
@@ -265,13 +234,8 @@ function ReceiptSheet({cars, currentUser, receipts, onClose, onSave}) {
             background:"#F8FAFC", boxSizing:"border-box", outline:"none",
           }}/>
         {lastKm && <div style={{fontSize:12,color:C.muted,marginTop:4}}>Letzter Stand: {parseInt(lastKm).toLocaleString("de-DE")} km</div>}
-        {kmWarning && (
-          <div style={{fontSize:12,color:C.danger,fontWeight:700,marginTop:4}}>
-            Warnung: KM-Stand niedriger als beim letzten Mal!
-          </div>
-        )}
+        {kmWarning && <div style={{fontSize:12,color:C.danger,fontWeight:700,marginTop:4}}>Warnung: KM-Stand niedriger als beim letzten Mal!</div>}
       </div>
-
       <Field label="Datum" type="date" value={date} onChange={e=>setDate(e.target.value)}/>
       <Field label="Notiz" placeholder="z.B. Shell Autobahn A9" value={note} onChange={e=>setNote(e.target.value)}/>
       <div style={{fontSize:12,fontWeight:600,color:C.muted,marginBottom:8}}>Foto des Belegs</div>
@@ -282,52 +246,37 @@ function ReceiptSheet({cars, currentUser, receipts, onClose, onSave}) {
       }}>
         {preview
           ? <img src={preview} style={{width:"100%",borderRadius:8,maxHeight:200,objectFit:"cover"}} alt="Vorschau"/>
-          : <>
-              <span style={{fontSize:32}}>📷</span>
-              <span style={{color:C.muted,fontSize:14,fontWeight:500}}>Foto aufnehmen oder auswählen</span>
-            </>
+          : <><span style={{fontSize:32}}>📷</span><span style={{color:C.muted,fontSize:14,fontWeight:500}}>Foto aufnehmen oder auswählen</span></>
         }
         <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handlePhoto}/>
       </label>
       <div style={{display:"flex",gap:10}}>
         <Btn variant="secondary" onClick={onClose}>Abbrechen</Btn>
-        <Btn variant="amber" disabled={!carId||!amount||!date||!km} onClick={()=>onSave({carId:parseInt(carId),amount,km,date,note,img})}>
+        <Btn variant="amber" disabled={!carId||!amount||!date||!km} onClick={()=>onSave({vehicle_id:carId,amount,odometer:parseInt(km),date,note,receipt_url:img})}>
           Speichern
         </Btn>
       </div>
     </Sheet>
   );
-}
-
-// ── AUTO HINZUFÜGEN ────────────────────────────────────────────────────────────
-function CarSheet({onClose, onSave}) {
+}function CarSheet({onClose, onSave}) {
   const [plate,setPlate] = useState("");
   const [model,setModel] = useState("");
-  const colors = ["#DBEAFE","#D1FAE5","#FEF3C7","#F3E8FF","#FFE4E6","#E0F2FE"];
-  const [color,setColor] = useState(colors[0]);
   return (
     <Sheet onClose={onClose} title="Fahrzeug hinzufügen">
       <Field label="Kennzeichen" placeholder="z.B. B-FM 1234" value={plate} onChange={e=>setPlate(e.target.value.toUpperCase())}/>
       <Field label="Modell" placeholder="z.B. VW Passat" value={model} onChange={e=>setModel(e.target.value)}/>
-      <div style={{fontSize:12,fontWeight:600,color:C.muted,marginBottom:8}}>Kartenfarbe</div>
-      <div style={{display:"flex",gap:10,marginBottom:18}}>
-        {colors.map(c=>(
-          <div key={c} onClick={()=>setColor(c)} style={{width:32,height:32,borderRadius:8,background:c,cursor:"pointer",border:`3px solid ${color===c?C.blue:"transparent"}`}}/>
-        ))}
-      </div>
       <div style={{display:"flex",gap:10}}>
         <Btn variant="secondary" onClick={onClose}>Abbrechen</Btn>
-        <Btn disabled={!plate||!model} onClick={()=>onSave({plate,model,color})}>Hinzufügen</Btn>
+        <Btn disabled={!plate||!model} onClick={()=>onSave({license_plate:plate,name:model})}>Hinzufügen</Btn>
       </div>
     </Sheet>
   );
 }
 
-// ── BILD ANSICHT ───────────────────────────────────────────────────────────────
 function ImgSheet({receipt, onClose}) {
   return (
     <Sheet onClose={onClose} title="Tankbeleg">
-      {receipt.img && <img src={receipt.img} style={{width:"100%",borderRadius:12,marginBottom:14}} alt="Beleg"/>}
+      {receipt.receipt_url && <img src={receipt.receipt_url} style={{width:"100%",borderRadius:12,marginBottom:14}} alt="Beleg"/>}
       <div style={{fontWeight:700,fontSize:16}}>{parseFloat(receipt.amount).toFixed(2).replace(".",",")} Euro</div>
       <div style={{fontSize:13,color:C.muted,marginTop:4}}>{receipt.note}</div>
       <div style={{marginTop:16}}><Btn variant="secondary" full onClick={onClose}>Schließen</Btn></div>
@@ -335,21 +284,19 @@ function ImgSheet({receipt, onClose}) {
   );
 }
 
-// ── KM VERLAUF SHEET ───────────────────────────────────────────────────────────
 function KmSheet({car, receipts, users, onClose}) {
-  const carReceipts = [...receipts.filter(r=>r.carId===car.id&&r.km)]
+  const carReceipts = [...receipts.filter(r=>r.vehicle_id===car.id&&r.odometer)]
     .sort((a,b)=>new Date(a.date)-new Date(b.date));
-
   return (
-    <Sheet onClose={onClose} title={`KM-Verlauf: ${car.plate}`}>
+    <Sheet onClose={onClose} title={`KM-Verlauf: ${car.license_plate}`}>
       {carReceipts.length===0 ? (
         <div style={{textAlign:"center",color:C.muted,padding:"20px 0"}}>Noch keine KM-Daten vorhanden.</div>
       ) : (
         carReceipts.map((r,i)=>{
           const prev = carReceipts[i-1];
-          const diff = prev ? parseInt(r.km)-parseInt(prev.km) : null;
+          const diff = prev ? parseInt(r.odometer)-parseInt(prev.odometer) : null;
           const warning = diff !== null && diff <= 0;
-          const uploader = users.find(u=>u.id===r.userId);
+          const uploader = users.find(u=>u.id===r.employee_id);
           return (
             <div key={r.id} style={{
               borderBottom:`1px solid ${C.border}`, paddingBottom:12, marginBottom:12,
@@ -358,28 +305,19 @@ function KmSheet({car, receipts, users, onClose}) {
             }}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div>
-                  <div style={{fontWeight:800,fontSize:16,color:C.text}}>
-                    {parseInt(r.km).toLocaleString("de-DE")} km
-                  </div>
-                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>
-                    {new Date(r.date).toLocaleDateString("de-DE")} · {uploader?.name}
-                  </div>
+                  <div style={{fontWeight:800,fontSize:16,color:C.text}}>{parseInt(r.odometer).toLocaleString("de-DE")} km</div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>{new Date(r.date).toLocaleDateString("de-DE")} · {uploader?.name}</div>
                   {r.note && <div style={{fontSize:12,color:C.muted}}>{r.note}</div>}
                 </div>
                 <div style={{textAlign:"right"}}>
                   {diff !== null ? (
-                    <div style={{
-                      fontWeight:700, fontSize:14,
-                      color: warning?C.danger:C.success,
-                    }}>
+                    <div style={{fontWeight:700,fontSize:14,color:warning?C.danger:C.success}}>
                       {warning ? "Warnung!" : `+${diff.toLocaleString("de-DE")} km`}
                     </div>
                   ) : (
                     <div style={{fontSize:12,color:C.muted}}>Start</div>
                   )}
-                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>
-                    {parseFloat(r.amount).toFixed(2).replace(".",",")} Euro
-                  </div>
+                  <div style={{fontSize:12,color:C.muted,marginTop:2}}>{parseFloat(r.amount).toFixed(2).replace(".",",")} Euro</div>
                 </div>
               </div>
               {warning && (
@@ -394,29 +332,53 @@ function KmSheet({car, receipts, users, onClose}) {
       <Btn variant="secondary" full onClick={onClose}>Schließen</Btn>
     </Sheet>
   );
-}
-
-// ── HAUPT APP ──────────────────────────────────────────────────────────────────
-export default function App() {
-  const [users,setUsers]         = useState(INIT_USERS);
+}export default function App() {
   const [user,setUser]           = useState(null);
   const [tab,setTab]             = useState("cars");
-  const [cars,setCars]           = useState(INIT_CARS);
-  const [handovers,setHandovers] = useState(INIT_HANDOVERS);
-  const [receipts,setReceipts]   = useState(INIT_RECEIPTS);
+  const [users,setUsers]         = useState([]);
+  const [cars,setCars]           = useState([]);
+  const [handovers,setHandovers] = useState([]);
+  const [receipts,setReceipts]   = useState([]);
   const [modal,setModal]         = useState(null);
   const [selected,setSelected]   = useState(null);
   const [viewReceipt,setViewReceipt] = useState(null);
   const [kmCar,setKmCar]         = useState(null);
+  const [loading,setLoading]     = useState(false);
 
-  if (!user) return <AuthScreen users={users} setUsers={setUsers} onLogin={setUser}/>;
+  useEffect(() => {
+    if (!user) return;
+    loadData();
+  }, [user]);
+
+  const loadData = async () => {
+    setLoading(true);
+    const [{ data: emp }, { data: veh }, { data: han }, { data: rec }] = await Promise.all([
+      supabase.from("employees").select("*"),
+      supabase.from("vehicles").select("*"),
+      supabase.from("handovers").select("*"),
+      supabase.from("fuel_receipts").select("*"),
+    ]);
+    if (emp) setUsers(emp);
+    if (veh) setCars(veh);
+    if (han) setHandovers(han);
+    if (rec) setReceipts(rec);
+    setLoading(false);
+  };
+
+  if (!user) return <AuthScreen onLogin={setUser}/>;
 
   const findUser = id => users.find(u=>u.id===id);
-  const userCar  = cars.find(c=>c.driverId===user.id);
-  const pending  = users.filter(u=>u.status==="pending");
+  const userCar  = cars.find(c=>c.driver_id===user.id);
+  const pending  = users.filter(u=>u.approved===false);
 
-  const approveUser = id => setUsers(p=>p.map(u=>u.id===id?{...u,status:"active"}:u));
-  const rejectUser  = id => setUsers(p=>p.filter(u=>u.id!==id));
+  const approveUser = async id => {
+    await supabase.from("employees").update({approved:true}).eq("id",id);
+    setUsers(p=>p.map(u=>u.id===id?{...u,approved:true}:u));
+  };
+  const rejectUser = async id => {
+    await supabase.from("employees").delete().eq("id",id);
+    setUsers(p=>p.filter(u=>u.id!==id));
+  };
 
   const tabs = [
     {id:"cars",     label:"Fahrzeuge", icon:"🚗"},
@@ -425,22 +387,19 @@ export default function App() {
     {id:"profile",  label:"Profil",    icon:"👤"},
   ];
 
-  const myReceipts = receipts.filter(r=>r.userId===user.id);
+  const myReceipts = receipts.filter(r=>r.employee_id===user.id);
 
-  // KM Warnung prüfen
-  const getKmWarning = (carId) => {
-    const carReceipts = [...receipts.filter(r=>r.carId===carId&&r.km)]
+  const getKmWarning = (vehicleId) => {
+    const carReceipts = [...receipts.filter(r=>r.vehicle_id===vehicleId&&r.odometer)]
       .sort((a,b)=>new Date(a.date)-new Date(b.date));
     for (let i=1;i<carReceipts.length;i++) {
-      if (parseInt(carReceipts[i].km)<=parseInt(carReceipts[i-1].km)) return true;
+      if (parseInt(carReceipts[i].odometer)<=parseInt(carReceipts[i-1].odometer)) return true;
     }
     return false;
   };
 
   return (
     <div style={{fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,sans-serif",background:C.bg,minHeight:"100vh",maxWidth:480,margin:"0 auto"}}>
-
-      {/* HEADER */}
       <div style={{
         background:`linear-gradient(135deg, ${C.navy} 0%, ${C.navyMid} 100%)`,
         color:"#fff", padding:"18px 20px 14px", position:"sticky", top:0, zIndex:100,
@@ -455,9 +414,7 @@ export default function App() {
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {user.role==="admin"&&pending.length>0 && (
-              <span style={{background:C.danger,color:"#fff",borderRadius:20,padding:"3px 10px",fontSize:12,fontWeight:800}}>
-                {pending.length} neu
-              </span>
+              <span style={{background:C.danger,color:"#fff",borderRadius:20,padding:"3px 10px",fontSize:12,fontWeight:800}}>{pending.length} neu</span>
             )}
             {user.role==="admin" && (
               <span style={{background:C.accent,color:C.navy,borderRadius:20,padding:"3px 10px",fontSize:12,fontWeight:800}}>CHEF</span>
@@ -466,7 +423,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* NAV */}
       <nav style={{display:"flex",background:C.card,borderBottom:`1px solid ${C.border}`,position:"sticky",top:68,zIndex:99}}>
         {tabs.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{
@@ -484,9 +440,9 @@ export default function App() {
       </nav>
 
       <div style={{padding:"16px 16px 100px"}}>
+        {loading && <div style={{textAlign:"center",padding:40,color:C.muted}}>Laden...</div>}
 
-        {/* FAHRZEUGE */}
-        {tab==="cars" && (
+        {!loading && tab==="cars" && (
           <>
             {user.role==="admin" && pending.length>0 && (
               <>
@@ -496,7 +452,6 @@ export default function App() {
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div>
                         <div style={{fontWeight:700,fontSize:15}}>{u.name}</div>
-                        <div style={{fontSize:12,color:C.muted}}>{u.email}</div>
                       </div>
                       <div style={{display:"flex",gap:8}}>
                         <Btn variant="danger" small onClick={()=>rejectUser(u.id)}>Ablehnen</Btn>
@@ -507,24 +462,23 @@ export default function App() {
                 ))}
               </>
             )}
-
             <SectionTitle>Alle Fahrzeuge ({cars.length})</SectionTitle>
             {cars.map(car=>{
-              const driver   = findUser(car.driverId);
-              const count    = receipts.filter(r=>r.carId===car.id).length;
-              const hasWarn  = user.role==="admin" && getKmWarning(car.id);
-              const lastKm   = [...receipts.filter(r=>r.carId===car.id&&r.km)]
-                .sort((a,b)=>new Date(b.date)-new Date(a.date))[0]?.km;
+              const driver  = findUser(car.driver_id);
+              const count   = receipts.filter(r=>r.vehicle_id===car.id).length;
+              const hasWarn = user.role==="admin" && getKmWarning(car.id);
+              const lastKm  = [...receipts.filter(r=>r.vehicle_id===car.id&&r.odometer)]
+                .sort((a,b)=>new Date(b.date)-new Date(a.date))[0]?.odometer;
               return (
-                <Card key={car.id} accent={hasWarn?C.danger:car.color}>
+                <Card key={car.id} accent={hasWarn?C.danger:"#DBEAFE"}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                    <Plate text={car.plate}/>
+                    <Plate text={car.license_plate}/>
                     {driver
-                      ? <span style={{background:car.color,borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:C.navyMid}}>👤 {driver.name}</span>
+                      ? <span style={{background:"#DBEAFE",borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:C.navyMid}}>👤 {driver.name}</span>
                       : <span style={{background:"#FEE2E2",borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:"#991B1B"}}>Frei</span>
                     }
                   </div>
-                  <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:4}}>{car.model}</div>
+                  <div style={{fontWeight:600,fontSize:14,color:C.text,marginBottom:4}}>{car.name}</div>
                   {lastKm && (
                     <div style={{fontSize:12,color:C.muted,marginBottom:6}}>
                       Letzter KM-Stand: <strong>{parseInt(lastKm).toLocaleString("de-DE")} km</strong>
@@ -535,21 +489,21 @@ export default function App() {
                     <Tag color={C.accent}>{count} Beleg{count!==1?"e":""}</Tag>
                     {user.role==="admin" && (
                       <button onClick={()=>{setKmCar(car);setModal("km");}} style={{
-                        background:hasWarn?"#FEE2E2":C.bg,
-                        color:hasWarn?C.danger:C.text,
+                        background:hasWarn?"#FEE2E2":C.bg, color:hasWarn?C.danger:C.text,
                         border:"none",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
-                      }}>
-                        {hasWarn?"⚠️ KM prüfen":"📊 KM-Verlauf"}
-                      </button>
+                      }}>{hasWarn?"⚠️ KM prüfen":"📊 KM-Verlauf"}</button>
                     )}
-                    {(user.role==="admin"||car.driverId===user.id) && (
+                    {(user.role==="admin"||car.driver_id===user.id) && (
                       <button onClick={()=>{setSelected(car);setModal("handover");}} style={{
                         background:C.bg,color:C.text,border:"none",borderRadius:8,
                         padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
                       }}>🔄 Übergabe</button>
                     )}
                     {user.role==="admin" && (
-                      <button onClick={()=>setCars(p=>p.filter(c=>c.id!==car.id))} style={{
+                      <button onClick={async()=>{
+                        await supabase.from("vehicles").delete().eq("id",car.id);
+                        setCars(p=>p.filter(c=>c.id!==car.id));
+                      }} style={{
                         background:"#FEE2E2",color:C.danger,border:"none",borderRadius:8,
                         padding:"5px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit",
                       }}>🗑</button>
@@ -558,35 +512,26 @@ export default function App() {
                 </Card>
               );
             })}
-            {user.role==="admin" && (
-              <Btn full onClick={()=>setModal("car-add")}>+ Fahrzeug hinzufügen</Btn>
-            )}
+            {user.role==="admin" && <Btn full onClick={()=>setModal("car-add")}>+ Fahrzeug hinzufügen</Btn>}
           </>
         )}
 
-        {/* ÜBERGABEN */}
-        {tab==="handover" && (
+        {!loading && tab==="handover" && (
           <>
             <SectionTitle>Übergabe-Historie</SectionTitle>
             {[...handovers].reverse().map(h=>{
-              const car  = cars.find(c=>c.id===h.carId);
-              const from = h.fromId?findUser(h.fromId):null;
-              const to   = findUser(h.toId);
-              if (user.role!=="admin"&&h.fromId!==user.id&&h.toId!==user.id) return null;
+              const car = cars.find(c=>c.id===h.vehicle_id);
+              const to  = findUser(h.employee_id);
+              if (user.role!=="admin"&&h.employee_id!==user.id) return null;
               return (
                 <Card key={h.id}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                    <Plate text={car?.plate}/>
-                    <span style={{fontSize:12,color:C.muted}}>{car?.model}</span>
+                    <Plate text={car?.license_plate}/>
+                    <span style={{fontSize:12,color:C.muted}}>{car?.name}</span>
                   </div>
-                  <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,flexWrap:"wrap"}}>
-                    <span style={{background:"#F1F5F9",borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:C.muted}}>
-                      {from?from.name:"Erstausgabe"}
-                    </span>
+                  <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13}}>
                     <span style={{color:C.blue,fontWeight:800}}>→</span>
-                    <span style={{background:"#DBEAFE",borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:C.navyMid}}>
-                      {to?.name}
-                    </span>
+                    <span style={{background:"#DBEAFE",borderRadius:20,padding:"4px 12px",fontSize:12,fontWeight:600,color:C.navyMid}}>{to?.name}</span>
                   </div>
                   <div style={{fontSize:12,color:C.muted,marginTop:8}}>
                     {new Date(h.date).toLocaleDateString("de-DE")}{h.note?` · ${h.note}`:""}
@@ -598,8 +543,7 @@ export default function App() {
           </>
         )}
 
-        {/* TANKBELEGE */}
-        {tab==="receipts" && (
+        {!loading && tab==="receipts" && (
           <>
             {user.role==="admin" ? (
               <>
@@ -607,9 +551,9 @@ export default function App() {
                 <button onClick={()=>{
                   const rows = ["Datum,Betrag,KM-Stand,Kennzeichen,Mitarbeiter,Notiz",
                     ...receipts.map(r=>{
-                      const car=cars.find(c=>c.id===r.carId);
-                      const u=findUser(r.userId);
-                      return `${r.date},${r.amount},${r.km||""},${car?.plate||""},${u?.name||""},${r.note||""}`;
+                      const car=cars.find(c=>c.id===r.vehicle_id);
+                      const u=findUser(r.employee_id);
+                      return `${r.date},${r.amount},${r.odometer||""},${car?.license_plate||""},${u?.name||""},${r.note||""}`;
                     })
                   ].join("\n");
                   const blob=new Blob([rows],{type:"text/csv"});
@@ -621,40 +565,32 @@ export default function App() {
                   background:C.success+"22",color:C.success,border:`1.5px solid ${C.success}33`,
                   borderRadius:10,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer",
                   fontFamily:"inherit",width:"100%",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-                }}>
-                  Alle Belege als Excel/CSV herunterladen
-                </button>
+                }}>Alle Belege als Excel/CSV herunterladen</button>
                 {receipts.map(r=>{
-                  const car=cars.find(c=>c.id===r.carId);
-                  const uploader=findUser(r.userId);
-                  const prevReceipt=[...receipts.filter(x=>x.carId===r.carId&&x.km&&new Date(x.date)<new Date(r.date))]
+                  const car=cars.find(c=>c.id===r.vehicle_id);
+                  const uploader=findUser(r.employee_id);
+                  const prevReceipt=[...receipts.filter(x=>x.vehicle_id===r.vehicle_id&&x.odometer&&new Date(x.date)<new Date(r.date))]
                     .sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
-                  const kmWarn = r.km && prevReceipt && parseInt(r.km)<=parseInt(prevReceipt.km);
+                  const kmWarn = r.odometer && prevReceipt && parseInt(r.odometer)<=parseInt(prevReceipt.odometer);
                   return (
                     <Card key={r.id} accent={kmWarn?C.danger:undefined}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                         <div>
                           <div style={{fontWeight:800,fontSize:17,color:C.text}}>{parseFloat(r.amount).toFixed(2).replace(".",",")} Euro</div>
-                          <div style={{fontSize:12,color:C.muted,marginTop:2}}>{new Date(r.date).toLocaleDateString("de-DE")} · {car?.plate}</div>
+                          <div style={{fontSize:12,color:C.muted,marginTop:2}}>{new Date(r.date).toLocaleDateString("de-DE")} · {car?.license_plate}</div>
                           <div style={{fontSize:12,color:C.muted}}>👤 {uploader?.name}</div>
-                          {r.km && (
-                            <div style={{fontSize:12,fontWeight:700,color:kmWarn?C.danger:C.muted,marginTop:2}}>
-                              {kmWarn?"⚠️ ":""}{parseInt(r.km).toLocaleString("de-DE")} km
-                              {kmWarn && " – KM auffällig!"}
-                            </div>
-                          )}
+                          {r.odometer && <div style={{fontSize:12,fontWeight:700,color:kmWarn?C.danger:C.muted,marginTop:2}}>{kmWarn?"⚠️ ":""}{parseInt(r.odometer).toLocaleString("de-DE")} km{kmWarn&&" – KM auffällig!"}</div>}
                           {r.note&&<div style={{fontSize:13,color:C.text,marginTop:4}}>{r.note}</div>}
                         </div>
                         <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
-                          {r.img
-                            ? <img src={r.img} onClick={()=>{setViewReceipt(r);setModal("img");}}
-                                style={{width:60,height:60,borderRadius:10,objectFit:"cover",border:`2px solid ${C.border}`,cursor:"pointer"}} alt="Beleg"/>
+                          {r.receipt_url
+                            ? <img src={r.receipt_url} onClick={()=>{setViewReceipt(r);setModal("img");}} style={{width:60,height:60,borderRadius:10,objectFit:"cover",border:`2px solid ${C.border}`,cursor:"pointer"}} alt="Beleg"/>
                             : <div style={{width:60,height:60,borderRadius:10,background:"#F1F5F9",border:`2px dashed ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.muted,textAlign:"center",padding:4}}>Kein Foto</div>
                           }
-                          <button onClick={()=>setReceipts(p=>p.filter(x=>x.id!==r.id))} style={{
-                            background:"#FEE2E2",color:C.danger,border:"none",borderRadius:8,
-                            padding:"4px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit",
-                          }}>🗑</button>
+                          <button onClick={async()=>{
+                            await supabase.from("fuel_receipts").delete().eq("id",r.id);
+                            setReceipts(p=>p.filter(x=>x.id!==r.id));
+                          }} style={{background:"#FEE2E2",color:C.danger,border:"none",borderRadius:8,padding:"4px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🗑</button>
                         </div>
                       </div>
                     </Card>
@@ -664,23 +600,20 @@ export default function App() {
             ) : (
               <>
                 <SectionTitle>Meine Belege ({myReceipts.length})</SectionTitle>
-                {myReceipts.length===0 && (
-                  <Card><div style={{textAlign:"center",color:C.muted,padding:"20px 0",fontSize:14}}>Noch keine Belege hochgeladen.</div></Card>
-                )}
+                {myReceipts.length===0 && <Card><div style={{textAlign:"center",color:C.muted,padding:"20px 0",fontSize:14}}>Noch keine Belege hochgeladen.</div></Card>}
                 {myReceipts.map(r=>{
-                  const car=cars.find(c=>c.id===r.carId);
+                  const car=cars.find(c=>c.id===r.vehicle_id);
                   return (
                     <Card key={r.id}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                         <div>
                           <div style={{fontWeight:800,fontSize:17}}>{parseFloat(r.amount).toFixed(2).replace(".",",")} Euro</div>
-                          <div style={{fontSize:12,color:C.muted,marginTop:2}}>{new Date(r.date).toLocaleDateString("de-DE")} · {car?.plate}</div>
-                          {r.km && <div style={{fontSize:12,color:C.muted,marginTop:2}}>{parseInt(r.km).toLocaleString("de-DE")} km</div>}
+                          <div style={{fontSize:12,color:C.muted,marginTop:2}}>{new Date(r.date).toLocaleDateString("de-DE")} · {car?.license_plate}</div>
+                          {r.odometer && <div style={{fontSize:12,color:C.muted,marginTop:2}}>{parseInt(r.odometer).toLocaleString("de-DE")} km</div>}
                           {r.note&&<div style={{fontSize:13,color:C.text,marginTop:4}}>{r.note}</div>}
                         </div>
-                        {r.img
-                          ? <img src={r.img} onClick={()=>{setViewReceipt(r);setModal("img");}}
-                              style={{width:60,height:60,borderRadius:10,objectFit:"cover",border:`2px solid ${C.border}`,cursor:"pointer"}} alt="Beleg"/>
+                        {r.receipt_url
+                          ? <img src={r.receipt_url} onClick={()=>{setViewReceipt(r);setModal("img");}} style={{width:60,height:60,borderRadius:10,objectFit:"cover",border:`2px solid ${C.border}`,cursor:"pointer"}} alt="Beleg"/>
                           : <div style={{width:60,height:60,borderRadius:10,background:"#F1F5F9",border:`2px dashed ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.muted,textAlign:"center",padding:4}}>Kein Foto</div>
                         }
                       </div>
@@ -693,8 +626,7 @@ export default function App() {
           </>
         )}
 
-        {/* PROFIL */}
-        {tab==="profile" && (
+        {!loading && tab==="profile" && (
           <>
             <Card style={{textAlign:"center",padding:"28px 20px"}}>
               <div style={{
@@ -704,25 +636,19 @@ export default function App() {
                 fontSize:28,fontWeight:800,color:"#fff",
               }}>{user.name.charAt(0)}</div>
               <div style={{fontWeight:800,fontSize:20}}>{user.name}</div>
-              <div style={{color:C.muted,fontSize:13,marginTop:2}}>{user.email}</div>
               <div style={{marginTop:12}}>
-                <Tag color={user.role==="admin"?C.accent:C.blue}>
-                  {user.role==="admin"?"👑 Administrator":"🚗 Fahrer"}
-                </Tag>
+                <Tag color={user.role==="admin"?C.accent:C.blue}>{user.role==="admin"?"👑 Administrator":"🚗 Fahrer"}</Tag>
               </div>
             </Card>
-
             {userCar && (
               <Card>
                 <SectionTitle>Mein Fahrzeug</SectionTitle>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <Plate text={userCar.plate}/>
-                  <span style={{fontWeight:600}}>{userCar.model}</span>
+                  <Plate text={userCar.license_plate}/>
+                  <span style={{fontWeight:600}}>{userCar.name}</span>
                 </div>
-                {userCar.since&&<div style={{fontSize:12,color:C.muted,marginTop:8}}>Seit {new Date(userCar.since).toLocaleDateString("de-DE")}</div>}
               </Card>
             )}
-
             {user.role==="admin" && (
               <>
                 <Card>
@@ -730,8 +656,8 @@ export default function App() {
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                     {[
                       {label:"Fahrzeuge",  val:cars.length},
-                      {label:"Belegt",     val:cars.filter(c=>c.driverId).length},
-                      {label:"Mitarbeiter",val:users.filter(u=>u.role!=="admin"&&u.status==="active").length},
+                      {label:"Belegt",     val:cars.filter(c=>c.driver_id).length},
+                      {label:"Mitarbeiter",val:users.filter(u=>u.role!=="admin"&&u.approved===true).length},
                       {label:"Belege",     val:receipts.length},
                     ].map(s=>(
                       <div key={s.label} style={{background:C.bg,borderRadius:12,padding:"14px 12px",textAlign:"center"}}>
@@ -746,36 +672,24 @@ export default function App() {
                   {users.filter(u=>u.role!=="admin").map(u=>(
                     <div key={u.id} style={{paddingBottom:12,marginBottom:12,borderBottom:`1px solid ${C.border}`}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                        <div>
-                          <div style={{fontWeight:600,fontSize:14}}>{u.name}</div>
-                          <div style={{fontSize:12,color:C.muted}}>{u.email}</div>
-                        </div>
-                        <Tag color={u.status==="active"?C.success:C.accent}>
-                          {u.status==="active"?"Aktiv":"Ausstehend"}
-                        </Tag>
+                        <div style={{fontWeight:600,fontSize:14}}>{u.name}</div>
+                        <Tag color={u.approved===true?C.success:C.accent}>{u.approved===true?"Aktiv":"Ausstehend"}</Tag>
                       </div>
                       <div style={{display:"flex",gap:8}}>
-                        <button onClick={()=>{
+                        <button onClick={async()=>{
                           const newPin = prompt(`Neue PIN fuer ${u.name}:`);
                           if (newPin && newPin.length>=4) {
+                            await supabase.from("employees").update({pin:newPin}).eq("id",u.id);
                             setUsers(p=>p.map(x=>x.id===u.id?{...x,pin:newPin}:x));
                             alert(`PIN fuer ${u.name} wurde geaendert.`);
-                          } else if (newPin) {
-                            alert("PIN muss mindestens 4 Ziffern haben.");
-                          }
-                        }} style={{
-                          background:"#DBEAFE",color:C.blue,border:"none",borderRadius:8,
-                          padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
-                        }}>PIN aendern</button>
-                        <button onClick={()=>{
+                          } else if (newPin) { alert("PIN muss mindestens 4 Ziffern haben."); }
+                        }} style={{background:"#DBEAFE",color:C.blue,border:"none",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>PIN aendern</button>
+                        <button onClick={async()=>{
                           if (window.confirm(`${u.name} wirklich loeschen?`)) {
+                            await supabase.from("employees").delete().eq("id",u.id);
                             setUsers(p=>p.filter(x=>x.id!==u.id));
-                            setCars(p=>p.map(c=>c.driverId===u.id?{...c,driverId:null,since:null}:c));
                           }
-                        }} style={{
-                          background:"#FEE2E2",color:C.danger,border:"none",borderRadius:8,
-                          padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
-                        }}>Loeschen</button>
+                        }} style={{background:"#FEE2E2",color:C.danger,border:"none",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Loeschen</button>
                       </div>
                     </div>
                   ))}
@@ -787,36 +701,35 @@ export default function App() {
         )}
       </div>
 
-      {/* MODALS */}
       {modal==="handover" && (
         <HandoverSheet cars={cars} users={users} currentUser={user} preselectedCar={selected}
           onClose={()=>setModal(null)}
-          onSave={h=>{
-            setHandovers(p=>[...p,{...h,id:p.length+1}]);
-            setCars(p=>p.map(c=>c.id===h.carId?{...c,driverId:h.toId,since:h.date}:c));
+          onSave={async h=>{
+            const { data } = await supabase.from("handovers").insert(h).select().single();
+            if (data) setHandovers(p=>[...p,data]);
+            await supabase.from("vehicles").update({driver_id:h.employee_id}).eq("id",h.vehicle_id);
+            setCars(p=>p.map(c=>c.id===h.vehicle_id?{...c,driver_id:h.employee_id}:c));
             setModal(null); setTab("handover");
           }}/>
       )}
       {modal==="receipt" && (
         <ReceiptSheet cars={cars} currentUser={user} receipts={receipts} onClose={()=>setModal(null)}
-          onSave={r=>{
-            setReceipts(p=>[...p,{...r,id:p.length+1,userId:user.id}]);
+          onSave={async r=>{
+            const { data } = await supabase.from("fuel_receipts").insert({...r,employee_id:user.id}).select().single();
+            if (data) setReceipts(p=>[...p,data]);
             setModal(null);
           }}/>
       )}
       {modal==="car-add" && (
         <CarSheet onClose={()=>setModal(null)}
-          onSave={c=>{
-            setCars(p=>[...p,{...c,id:p.length+1,driverId:null,since:null}]);
+          onSave={async c=>{
+            const { data } = await supabase.from("vehicles").insert(c).select().single();
+            if (data) setCars(p=>[...p,data]);
             setModal(null);
           }}/>
       )}
-      {modal==="img" && viewReceipt && (
-        <ImgSheet receipt={viewReceipt} onClose={()=>setModal(null)}/>
-      )}
-      {modal==="km" && kmCar && (
-        <KmSheet car={kmCar} receipts={receipts} users={users} onClose={()=>setModal(null)}/>
-      )}
+      {modal==="img" && viewReceipt && <ImgSheet receipt={viewReceipt} onClose={()=>setModal(null)}/>}
+      {modal==="km" && kmCar && <KmSheet car={kmCar} receipts={receipts} users={users} onClose={()=>setModal(null)}/>}
     </div>
   );
 }
